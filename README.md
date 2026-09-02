@@ -1,5 +1,28 @@
 # Disaster Recovery & Buisness Continuity - Simulated Healthcare Infrastructure 
 
+**Course:** Disaster Recovery and Buiness Continuity
+**Professor:** Prof Igor Tomičić
+**Submitted:** September 2026
+
+## Team
+| Name | Role |
+|---|---|
+| Athul Thuvattu Paramabth | Team Leader / Project Manager|
+| Thattarakkal Vishnu Viswanath | Virtual Infrastructure Engineer |
+| Varghese Kuruvilla | Backup and Recovery Specialist|
+| Anantha Krishnan Anil Kumar | Monitoring and Automation Developer |
+
+## Table of Contents
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Directory Structure](#directory-structure)
+- [Setup](#setup)
+- [Testing a Specific Failure on Demand](#testing-a-specific-failure-on-demand)
+- [What the Orchestrator Checks and Recovers](#what-the-orchestrator-checks-and-recovers)
+- [Documentation](#documentation)
+- [Known Limitation](#known-limitation--things-to-keep-an-eye-on)
+
+## Overview
 A self-healing disaster recovery system for a simulated 4-server environment (web, database, file, and backup servers), built as a Disaster Recovery and Buisness Continuity project. Automated backups, health monitoring via Monit/M-Monit, and an orchestrator that detects failures and runs targeted Ansible playbooks to recover - with a built-in Python failsafe for disk-space recovery that doesn't depend on the Ansible layer alone.
 
 ## Architecture
