@@ -1,0 +1,15 @@
+---
+- name: Recover Web Server
+  hosts: webserver
+  become: yes
+
+  tasks:
+    - name: Check nginx configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Restart Nginx service
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+        enabled: yes

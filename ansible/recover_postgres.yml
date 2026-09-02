@@ -1,0 +1,11 @@
+---
+- name: Recover PostgreSQL Server
+  hosts: dbserver
+  become: yes
+
+  tasks:
+    - name: Restart PostgreSQL service
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
+        enabled: yes

@@ -1,0 +1,55 @@
+---
+# Last-resort disk recovery. Only invoked by the orchestrator when the
+# normal recover_disk.yml has already run and the disk is STILL critical
+# after the verify retries. Unlike recover_disk.yml, this ignores age
+# entirely and keeps only the 3 most recent backups of each type.
+- name: Emergency backup disk recovery (last resort)
+  hosts: backupserver
+  become: yes
+
+  tasks:
+    - name: Remove simulated disk fill file (if present)
+      ansible.builtin.file:
+        path: /backup/full.disk
+        state: absent
+
+    - name: Find all compressed backup files
+      ansible.builtin.find:
+        paths: /backup
+        recurse: yes
+        patterns:
+          - "*.tar.gz"
+          - "*.dump.gz"
+        file_type: file
+      register: all_backup_files
+
+    - name: Delete all but the 3 most recent backup files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (all_backup_files.files | sort(attribute='mtime'))[:-3] }}"
+      when: (all_backup_files.files | length) > 3
+
+    - name: Find fileserver backup directories
+      ansible.builtin.find:
+        paths: /backup/files
+        file_type: directory
+        patterns: "backup_*"
+      register: all_backup_dirs
+      ignore_errors: yes
+
+    - name: Delete all but the 3 most recent fileserver backup dirs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (all_backup_dirs.files | default([]) | sort(attribute='mtime'))[:-3] }}"
+      when: (all_backup_dirs.files | default([]) | length) > 3
+
+    - name: Report final backup disk usage
+      ansible.builtin.command: df -h /backup
+      register: emergency_disk_status
+      changed_when: false
+
+    - name: Display final disk usage
+      ansible.builtin.debug:
+        var: emergency_disk_status.stdout_lines

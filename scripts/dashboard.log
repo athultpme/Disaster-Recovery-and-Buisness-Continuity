@@ -1,0 +1,15 @@
+nohup: ignoring input
+/backup/scripts/./dashboard_simple.py:8: SyntaxWarning: invalid escape sequence '\$'
+  mem = subprocess.check_output("free -m | awk 'NR==2{print int(\$3*100/\$2)}'", shell=True).decode().strip()
+Dashboard at http://192.168.52.5:5000
+Traceback (most recent call last):
+  File "/backup/scripts/./dashboard_simple.py", line 28, in <module>
+    HTTPServer(('0.0.0.0', 5000), StatusHandler).serve_forever()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socketserver.py", line 457, in __init__
+    self.server_bind()
+  File "/usr/lib/python3.12/http/server.py", line 136, in server_bind
+    socketserver.TCPServer.server_bind(self)
+  File "/usr/lib/python3.12/socketserver.py", line 473, in server_bind
+    self.socket.bind(self.server_address)
+OSError: [Errno 98] Address already in use

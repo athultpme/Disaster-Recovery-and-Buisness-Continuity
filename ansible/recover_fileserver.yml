@@ -1,0 +1,15 @@
+---
+- name: Recover File Server
+  hosts: fileserver
+  become: yes
+
+  tasks:
+    - name: Validate Samba configuration
+      ansible.builtin.command: testparm -s
+      changed_when: false
+
+    - name: Restart Samba service
+      ansible.builtin.service:
+        name: smbd
+        state: restarted
+        enabled: yes

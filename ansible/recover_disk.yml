@@ -1,0 +1,70 @@
+---
+- name: Recover backup disk space
+  hosts: backupserver
+  become: yes
+
+  tasks:
+    - name: Show backup disk usage before cleanup
+      ansible.builtin.command: df -h /backup
+      register: disk_before
+      changed_when: false
+
+    - name: Display backup disk usage before cleanup
+      ansible.builtin.debug:
+        var: disk_before.stdout_lines
+
+    - name: Remove simulated disk fill file
+      ansible.builtin.file:
+        path: /backup/full.disk
+        state: absent
+
+    # Fixed: original pattern was only "*.tar.gz", which catches the
+    # webserver's nginx backups but misses the database's
+    # "postgres_backup_*.dump.gz" files entirely, and can never match the
+    # fileserver's timestamped backup directories since -type f excludes
+    # directories. In a real (non-simulated) disk-full event this task
+    # would have freed almost nothing.
+    - name: Find old backup files older than seven days
+      ansible.builtin.find:
+        paths: /backup
+        recurse: yes
+        age: 7d
+        patterns:
+          - "*.tar.gz"
+          - "*.dump.gz"
+        file_type: file
+      register: old_backup_files
+
+    - name: Find old fileserver backup directories older than seven days
+      ansible.builtin.find:
+        paths: /backup/files
+        age: 7d
+        file_type: directory
+        patterns: "backup_*"
+      register: old_backup_dirs
+      ignore_errors: yes
+
+    - name: Display backup items selected for deletion
+      ansible.builtin.debug:
+        msg: "{{ (old_backup_files.files | map(attribute='path') | list) + (old_backup_dirs.files | default([]) | map(attribute='path') | list) }}"
+
+    - name: Remove old backup files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_backup_files.files }}"
+
+    - name: Remove old fileserver backup directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_backup_dirs.files | default([]) }}"
+
+    - name: Show backup disk usage after cleanup
+      ansible.builtin.command: df -h /backup
+      register: disk_after
+      changed_when: false
+
+    - name: Display backup disk usage after cleanup
+      ansible.builtin.debug:
+        var: disk_after.stdout_lines

@@ -1,0 +1,30 @@
+---
+- name: Recover Backup Server
+  hosts: backupserver
+  become: yes
+
+  tasks:
+    # Fixed: dr_orchestrator143.py's check_backupserver() verifies
+    # `test -d /backup` as part of "healthy". If that directory were
+    # ever missing, this recovery previously had no task to recreate
+    # it and would fail the same health check forever.
+    - name: Ensure /backup directory exists
+      ansible.builtin.file:
+        path: /backup
+        state: directory
+        owner: backupserver
+        group: backupserver
+        mode: "0755"
+
+    - name: Restart cron service
+      ansible.builtin.service:
+        name: cron
+        state: restarted
+        enabled: yes
+
+    - name: Restart rsync service if present
+      ansible.builtin.service:
+        name: rsync
+        state: restarted
+        enabled: yes
+      ignore_errors: yes

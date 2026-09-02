@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+
+import subprocess
+import psutil
+import time
+from datetime import datetime
+import os 
+
+LOG_FILE = "/backup/logs/dr_alerts.log"
+MIN_FREE_DISK = 2 * 1024**3   # 2GB
+AUTO_RECOVERY = True         # 🔥 Set False for monitoring-only mode
+
+DB_HOST = "dbserver@192.168.52.4"
+WEB_HOST = "webserver@192.168.52.3"
+
+# -----------------------------------
+# Logging
+# -----------------------------------
+def log_event(message):
+    entry = f"[{datetime.now()}] {message}"
+    print(entry)
+    with open(LOG_FILE, "a") as f:
+        f.write(entry + "\n")
+
+
+# -----------------------------------
+# SSH Command Helper
+# -----------------------------------
+def ssh_command(host, command):
+    try:
+        result = subprocess.run(
+            f"ssh -o BatchMode=yes -o ConnectTimeout=5 {host} \"{command}\"",
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        return result.stdout.strip(), result.returncode
+    except Exception as e:
+        return str(e), 1
+
+
+# -----------------------------------
+# Health Checks
+# -----------------------------------
+#def check_postgres():
+#    output, code = ssh_command(DB_HOST, "systemctl status postgresql ")
+#    return output == "active"
+
+
+
+def check_postgres():
+    output, code = ssh_command(
+        DB_HOST,
+        "pg_isready -h localhost -p 5432"
+    )
+    return code == 0 and "accepting connections" in output
+
+#def check_nginx():
+#    output, code = ssh_command(WEB_HOST, "systemctl status nginx")
+#    return output == "active"
+
+def check_nginx():
+    output, code = ssh_command(
+        WEB_HOST,
+        "curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://localhost"
+    )
+    return code == 0 and output == "200"
+
+def check_disk():
+    free = psutil.disk_usage('/backup').free
+    return free >= MIN_FREE_DISK
+
+
+def check_health():
+    if not check_postgres():
+        return False, "PostgreSQL"
+    if not check_nginx():
+        return False, "Nginx"
+    if not check_disk():
+        return False, "Disk"
+    return True, "All Healthy"
+
+
+# -----------------------------------
+# Recovery Logic
+# -----------------------------------
+def recover_postgres():
+    log_event("[RECOVERY] Restarting PostgreSQL...")
+    ssh_command(DB_HOST, "sudo systemctl restart postgresql.service")
+
+
+def recover_nginx():
+    log_event("[RECOVERY] Restarting Nginx...")
+    ssh_command(WEB_HOST, "sudo systemctl restart nginx")
+
+
+def recover_disk():
+    log_event("[RECOVERY] Cleaning test disk file...")
+    subprocess.run("rm -f /backup/full.disk", shell=True)
+
+
+def orchestrate_recovery(issue):
+    start_time = time.time()
+    log_event(f"[ALERT] {issue} failure detected")
+
+    if not AUTO_RECOVERY:
+        log_event("[INFO] Monitoring Mode Enabled — No Recovery Triggered")
+        return
+
+    if issue == "PostgreSQL":
+        recover_postgres()
+    elif issue == "Nginx":
+        recover_nginx()
+    elif issue == "Disk":
+        recover_disk()
+    else:
+        log_event("[WARNING] Unknown issue")
+        return
+
+    # Retry health check up to 3 times
+    for attempt in range(3):
+        time.sleep(5)
+        healthy, _ = check_health()
+        if healthy:
+            rto = round(time.time() - start_time, 2)
+            log_event(f"[SUCCESS] System recovered | RTO: {rto} seconds")
+            return
+
+    log_event("[CRITICAL] Recovery failed after retries")
+
+
+# -----------------------------------
+# Main
+# -----------------------------------
+if __name__ == "__main__":
+    log_event("------------------------------------------------")
+    log_event("[DR CHECK STARTED]")
+
+    healthy, status = check_health()
+
+    if healthy:
+        log_event("[STATUS] All systems healthy")
+    else:
+        orchestrate_recovery(status)
+
+    log_event("[DR CHECK FINISHED]")
+

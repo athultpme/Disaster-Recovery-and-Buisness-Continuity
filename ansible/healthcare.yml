@@ -1,0 +1,37 @@
+---
+- name: Deploy Healthcare Monitoring
+  # Fixed: "hosts: healthcare" previously matched nothing in inventory.ini.
+  # inventory.ini now defines a [healthcare:children] group covering the
+  # critical service hosts.
+  hosts: healthcare
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Netdata
+      apt:
+        name: netdata
+        state: present
+
+    - name: Enable and start Netdata
+      systemd:
+        name: netdata
+        enabled: yes
+        state: started
+
+    # Fixed: restricted from 0.0.0.0/0 (any source) to the backup/admin
+    # subnet. A monitoring dashboard for a healthcare system shouldn't be
+    # reachable from the whole network.
+    - name: Open Netdata port to the management subnet only
+      ufw:
+        rule: allow
+        port: 19999
+        proto: tcp
+        from_ip: 192.168.52.0/24
+
+    # Fixed: original always force-restarted Netdata after "started",
+    # causing a brief monitoring gap on every single playbook run
+    # regardless of whether anything changed. "state: started" above
+    # already ensures it's running; only restart if config actually changed.

@@ -1,0 +1,12 @@
+python3: can't open file '/backup/scripts/./restore_dnpostgre.py': [Errno 2] No such file or directory
+python3: can't open file '/backup/scripts/./restore_dnpostgre.py': [Errno 2] No such file or directory
+python3: can't open file '/backup/scripts/./restore_dnpostgre.py': [Errno 2] No such file or directory
+python3: can't open file '/backup/scripts/./restore_dnpostgre.py': [Errno 2] No such file or directory
+/backup/scripts/dashboard_simple.py:8: SyntaxWarning: invalid escape sequence '\$'
+  mem = os.popen("free -m | awk 'NR==2{print int(\$3*100/\$2)}'").read().strip()
+awk: cmd. line:1: NR==2{print int(\$3*100/\$2)}
+awk: cmd. line:1:                 ^ backslash not last character on line
+192.168.52.5 - - [22/Jan/2026 18:48:16] "GET / HTTP/1.1" 200 -
+awk: cmd. line:1: NR==2{print int(\$3*100/\$2)}
+awk: cmd. line:1:                 ^ backslash not last character on line
+192.168.52.5 - - [22/Jan/2026 18:48:17] "GET /favicon.ico HTTP/1.1" 200 -
