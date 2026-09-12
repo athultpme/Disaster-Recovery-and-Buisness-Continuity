@@ -1,110 +1,174 @@
-# Disaster Recovery & Buisness Continuity - Simulated Healthcare Infrastructure 
+# Disaster Recovery and Business Continuity: Simulated Healthcare Infrastructure
 
-**Course:** Disaster Recovery and Buiness Continuity
-**Professor:** Prof Igor Tomičić
-**Submitted:** September 2026
+**Course:** Disaster Recovery and Business Continuity  
+**Institution:** University of Applied Sciences  
+**Instructor:** Prof. Igor Tomičić  
+**Submission Date:** September 2026
 
 ## Team
+
 | Name | Role |
 |---|---|
-| Athul Thuvattu Paramabth | Team Leader / Project Manager|
+| Athul Thuvattu Paramabth | Team Lead / Project Manager |
 | Thattarakkal Vishnu Viswanath | Virtual Infrastructure Engineer |
-| Varghese Kuruvilla | Backup and Recovery Specialist|
+| Varghese Kuruvilla | Backup and Recovery Specialist |
 | Anantha Krishnan Anil Kumar | Monitoring and Automation Developer |
 
-## Table of Contents
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Directory Structure](#directory-structure)
-- [Setup](#setup)
-- [Testing a Specific Failure on Demand](#testing-a-specific-failure-on-demand)
-- [What the Orchestrator Checks and Recovers](#what-the-orchestrator-checks-and-recovers)
-- [Documentation](#documentation)
-- [Known Limitation](#known-limitation--things-to-keep-an-eye-on)
-
 ## Overview
-A self-healing disaster recovery system for a simulated 4-server environment (web, database, file, and backup servers), built as a Disaster Recovery and Buisness Continuity project. Automated backups, health monitoring via Monit/M-Monit, and an orchestrator that detects failures and runs targeted Ansible playbooks to recover - with a built-in Python failsafe for disk-space recovery that doesn't depend on the Ansible layer alone.
+
+This project presents a self-healing disaster recovery and business continuity system designed for a simulated four-server healthcare infrastructure. The system automatically detects and recovers from common failure modes across web, database, file, and backup servers using coordinated monitoring, orchestration, and playbook-driven recovery.
+
+**Key Capabilities:**
+- Automated failure detection via Monit agents across all infrastructure nodes
+- Centralized orchestration and recovery coordination from a dedicated backup server
+- Recovery playbooks for six critical failure scenarios (PostgreSQL, Nginx, Samba, backup, and disk failures)
+- Integrated backup and point-in-time recovery for all stateful services
 
 ## Architecture
 
 ```
-_______________        ________________      _______________
-| webserver    |       |  dbserver     |     |fileserver    |
-| (nginx)      |       |(PostgreSQL)   |     |(Samba)       |
-|______________|       |_______________|     |______________|
-    | Monit agent, reports to M/Monit           |              
-    |________________________________________                           
-                        _______|______________       
-                        | backupserver       |
-                        | - M/Monit          |         
-                        | - dr_orchestrator.py                   
-                        | - Ansible Pplaybook                   
-                        | - backup storage (/backup)                   
-                        |                    |
-                        |____________________|
+┌─────────────────┐  ┌──────────────────┐  ┌─────────────────┐
+│   webserver     │  │   dbserver       │  │  fileserver     │
+│   (Nginx)       │  │ (PostgreSQL)     │  │   (Samba)       │
+│ Monit Agent     │  │  Monit Agent     │  │  Monit Agent    │
+└────────┬────────┘  └────────┬─────────┘  └────────┬────────┘
+         │                    │                      │
+         └────────────────────┼──────────────────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │ backupserver       │
+                    │ • M/Monit Central  │
+                    │ • Orchestrator     │
+                    │ • Ansible          │
+                    │ • Backup Storage   │
+                    │  (/backup)         │
+                    └────────────────────┘
 ```
 
-Each host runs a local Monit agent that reports to the M/Monit dashboard on `backupserver` and can trigger immediate recovery via `exec` actions. `backupserver` also runs `dr_orchestrator.py` on a 5-minute cron schedule as a second, independent safety net.
+Each infrastructure node runs a local Monit agent reporting to the M/Monit dashboard on the backup server. The backup server orchestrates recovery actions via Ansible and can trigger automated responses through Monit exec actions. The orchestrator runs on a 5-minute cycle, performing health checks and initiating recovery workflows as needed.
 
-## Directory structure
+## Repository Structure
 
 ```
-scripts/ 
-  backup/       # scheduled backup scripts (cron), one per service
-  restore/      # manual restore scripts, run on demand
-  monitoring/   # standalone health-check script for the DB backup
-  dr/           # orchestrator, trigger entrypoint, disaster simulator
-ansible/        # inventory + one recovery playbook per failure type
-monit/          # systemd unit for M/Monit + guide for wiring
-auto-triggers
-docs/           # deployment walkthrough
+.
+├── ansible/           # Playbooks for recovery and configuration
+├── scripts/           # Orchestration, backup, and simulation tools
+│   ├── backup/        # Scheduled backup routines (cron-triggered)
+│   ├── restore/       # Manual restore scripts
+│   ├── monitoring/    # Health-check automation
+│   └── dr/            # Orchestrator and disaster simulator
+├── monit/             # M/Monit integration and auto-trigger configuration
+├── docs/              # Deployment and operational guides
+└── README.md
 ```
 
-## Setup
+## Getting Started
 
-**Start with `docs/SETUP_GUIDE.md`** It's a complete, linear runbook for building this entire system from bare virtual machines - required software per host, SSH trust in both directions, sudoers configuration, Ansible deployment, Monit wiring, cronscheduling, and a full verification sequence with expected results.
+**Start here:** [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)
 
-`docs/IMPLEMENTATION_GUIDE.md` and `monit/MONIT_AUTOTRIGGER_GUIDE.md`
-go deeper on the Ansible and Monit layers specifically, and are referenced from within the setup guide at the relevant steps.
+This is a complete, step-by-step runbook for building the entire system from bare virtual machines, including:
 
-Quick summary of what the setup guide covers:
-1. Set up four virtual machines in virtual box (web server, databse server, file server, and backup server) and install tools required.
-2. Set up passwordless SSH from `backupserver` to the other three hosts (Ansible needs this) and from each host back to `backupserver` (Monit's exec actions need this, opposite direction).
-3. Deploy `ansible/*` to `backupserver:/backup/scripts/` (backup/restore scripts run on backupserver and reach out over SSH to the relevant host).
-4. Deploy `scripts/*` to `backupserver:/backup/scripts/` (backup/restore scripts run on backupserver and reach out over SSH to the relevant host).
-5. Schedule backups and the orchestrator via cron (see IMPLEMENTATION_GUIDE.md)
-6. Install `monit/mmonit.service` so M/Monit survives reboots and restarts automatically on crash.
-7. Add the exec triggers from `MONIT_AUTOTRIGGER_GUIDE.md` to each host's local Monit config.
-8. Run `scripts/disaster_sim143.py` to inject a test failure and confirm end-to-end recovery.
+1. Virtual machine provisioning (4 Ubuntu VMs)
+2. Required software installation per host
+3. Passwordless SSH configuration for Ansible and Monit
+4. Deployment of automation and playbooks
+5. Cron scheduling for backups and the orchestrator
+6. M/Monit systemd configuration
+7. Monit exec trigger configuration per host
+8. End-to-end testing with `scripts/disaster_sim143.py`
 
-## What the orchestrator checks and recovers
+**Supplementary guides:**
+- [docs/IMPLEMENTATION_GUIDE.md](docs/IMPLEMENTATION_GUIDE.md) — Ansible deployment and cron scheduling details
+- [monit/MONIT_AUTOTRIGGER_GUIDE.md](monit/MONIT_AUTOTRIGGER_GUIDE.md) — M/Monit setup and exec action wiring
+- [docs/Final_Project_Report.docx](docs/Final_Project_Report.docx) — Complete project report with measured results and evidence from live testing
 
-| Failure type | Detection | Recovery playbook |
+## Failure Detection and Recovery
+
+The orchestrator monitors six categories of failures and executes targeted recovery actions:
+
+| Failure Type | Detection Method | Recovery Action |
 |---|---|---|
-| PostgreSQL down | `pg_isready` over SSH to dbserver | `recover_postgres.yml` |
-| Nginx down | `systemctl is-active`, falls back to an HTTP check | `recover_nginx.yml` |
-| Samba/file server down |`systemctl is-active smbd` on fileserver | `recover_nginx.yml`|
-| Backup server unhealthy | `cron` + `rsync` active, `/backup` exists | `recover_backupserver.yml` |
-| Low disk space (any host) | remote `df` over SSH, all 4 hosts | `recover_disk.yml`, escalating to `recover_disk_emergency.yml`, then a built-in Python failsafe that removes the known disk-filler file directly over SSH regardless of playbook state |
+| PostgreSQL Service Down | `pg_isready` via SSH | `recover_postgres.yml` |
+| Nginx Service Down | `systemctl is-active`; fallback to HTTP probe | `recover_nginx.yml` |
+| Samba/File Server Down | `systemctl is-active smbd` via SSH | `recover_fileserver.yml` |
+| Backup Server Unhealthy | Verify cron, rsync, and `/backup` availability | `recover_backupserver.yml` |
+| Low Disk Space (any host) | Remote `df` over SSH to all 4 hosts | `recover_disk.yml` + emergency escalation |
+| Disk Space Emergency | Retain if all mitigations fail | `recover_disk_emergency.yml` + Python failsafe |
 
-Each check retries before being trusted (avoids false alarms from a single slow SSH response), and there's a settle period after a recovery action before the orchestrator re-verifies (avoids reporting a service as "still down" while it's mid-restart).
+All health checks retry before being marked as failed (avoiding false alarms from transient network delays). Recovery actions enforce a settle period before re-verification to allow services time to stabilize.
 
-## Known limitation / things to keep an eye on
-- Backup retention across scripts isn't unified - `backup_postgresql.sh`, `backup_dbpostgre.py`, and the fileserver/webserver scripts each keep their own schedule. Pick one canonical DB backup method rather than running both.
-- The disk failsafe currently assumes the simulated failure file is `/backup/full.disk` (from `disaster_sim143.py`). In a non-simulated environment, replace or extend this with logic specific to your real disk-uasge patterns.
-Monit's default admin credentials should be changed before this goes anywhere beyond a lab environment - see `monit/MONIT_AUTOTRIGGER_GUIDE.md`
+## Testing Failures On-Demand
 
-## Testing a specific failure on demand
-`disaster_sim143.py` originally only picked a random failure. It now accept a target:
+The disaster simulator allows targeted failure injection for testing:
+
 ```bash
+# Inject a specific failure
 python3 scripts/disaster_sim143.py disk
 python3 scripts/disaster_sim143.py nginx
 python3 scripts/disaster_sim143.py postgresql
-python3 scripts/disaster_sim143.py --list
-```
-Run with no argument for the original random behavior.
 
-## Documentation
-- `docs/SETUP_GUIDE.md` - **start here** - complete from-scratch build instructions.
--`docs/IMPLEMENTAION_GUIDE.md` - deployment walkthrough for the Ansible/backup layer.
-- `docs/Final_Project_Report.docx` - the complete project report, covering all required project phases with measured test results and screenshot evidence for every failure type.
+# List available failures
+python3 scripts/disaster_sim143.py --list
+
+# Inject a random failure (default behavior)
+python3 scripts/disaster_sim143.py
+```
+
+## Operational Assumptions
+
+- **Topology:** Four Ubuntu VMs (webserver, dbserver, fileserver, backupserver)
+- **Orchestration:** SSH + Ansible from backup server to other hosts
+- **Canonical Orchestrator:** `scripts/dr_orchestrator143.py` (primary implementation)
+- **Legacy Scripts:** `dr_orchestrator.py`, `dr_orchestrator1.py`, `dr_orchestrator123.py` are historical; use only if explicitly required
+- **Backup and Script Paths:** Anchored at `/backup/scripts/` on the backup server
+- **Inventory:** Defined in `ansible/inventory.ini`
+
+## Code Conventions
+
+When modifying automation in this repository:
+
+1. **Preserve the orchestration flow.** Keep changes small and explicit; avoid architectural rewrites without justification.
+2. **Respect host safety.** Use idiomatic SSH and Ansible commands; do not hardcode hostnames or paths unless the existing script already does so.
+3. **Follow logging patterns.** Maintain consistency with existing logging and backup file naming conventions.
+4. **Validate before claiming readiness:**
+   ```bash
+   ansible -i ansible/inventory.ini all -m ping
+   python3 -m py_compile scripts/*.py
+   bash -n scripts/*.sh
+   ```
+
+## Known Limitations
+
+- **Unified backup retention:** `backup_postgresql.sh`, `backup_dbpostgre.py`, and file/web server backup scripts each maintain separate retention schedules. Consider consolidating to a single canonical backup method for PostgreSQL.
+- **Disk failsafe assumption:** The disk recovery logic currently targets `/backup/full.disk` (the simulated failure artifact). In production, replace or extend this with domain-specific logic for your actual disk-filling processes.
+- **Monit default credentials:** The M/Monit dashboard uses default admin credentials. Change these before deploying beyond a lab environment (see `monit/MONIT_AUTOTRIGGER_GUIDE.md`).
+
+## Validation and Verification Commands
+
+Verify Ansible connectivity and playbook execution:
+
+```bash
+ansible -i ansible/inventory.ini all -m ping
+ansible-playbook -i ansible/inventory.ini setup_web.yml
+ansible-playbook -i ansible/inventory.ini healthcare.yml
+ansible-playbook -i ansible/inventory.ini recover_postgres.yml
+ansible-playbook -i ansible/inventory.ini recover_nginx.yml
+ansible-playbook -i ansible/inventory.ini recover_fileserver.yml
+ansible-playbook -i ansible/inventory.ini recover_backupserver.yml
+ansible-playbook -i ansible/inventory.ini recover_disk.yml
+```
+
+Validate Python and shell scripts:
+
+```bash
+python3 -m py_compile scripts/*.py
+bash -n scripts/*.sh
+```
+
+## Project Scope and Language Composition
+
+This project is written primarily in **Python (91.7%)** for orchestration and simulation, with **Shell scripting (8.3%)** for backup automation and system integration. It is infrastructure-focused, not a typical application service; all changes should prioritize production safety and adhere to the operational documentation.
+
+---
+
+**For complete implementation details, see [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md).**
