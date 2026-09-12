@@ -1,7 +1,5 @@
 # Disaster Recovery and Business Continuity: Simulated Healthcare Infrastructure
 
-**Course:** Disaster Recovery and Business Continuity  
-**Institution:** University of Applied Sciences  
 **Instructor:** Prof. Igor Tomičić  
 **Submission Date:** September 2026
 
